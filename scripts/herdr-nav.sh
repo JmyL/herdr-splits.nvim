@@ -9,7 +9,8 @@
 # 2. If no (a plain Herdr pane): unzoom if needed, then move Herdr pane focus.
 #    At a layout edge, focus wraps around to the opposite side (smart-splits
 #    style), so navigating past the last pane lands on the first — unless
-#    `nav_at_edge=stop`, in which case it halts at the edge.
+#    `nav_at_edge=stop`, in which case it halts at the edge. When the pane is
+#    zoomed and `unzoom_on_nav=false`, stay put (do not move pane focus).
 #
 # Auto-unzoom is configurable via `unzoom_on_nav=false` in
 # `~/.config/herdr/plugins/config/herdr-splits/herdr-splits.conf`
@@ -76,25 +77,23 @@ edges_out=$("$herdr" pane edges --current 2>/dev/null || true)
 
 # A zoomed pane fills the tab and reports itself at every edge, so the edge
 # flags are useless for the wrap decision. Unzoom (if enabled) so we can
-# trust them. If unzoom is disabled we leave zoom untouched and must NOT use
-# the (all-true) edge flags — wrap is skipped below in that case.
-edges_trusted=1
+# trust them. If unzoom is disabled, stay in the zoomed pane — do not move
+# focus (the all-true edge flags would otherwise look like a wrap/stop, or
+# an untrusted-flag fallback would focus a neighbor).
 if printf '%s' "$edges_out" | grep -q '"zoomed"[[:space:]]*:[[:space:]]*true'; then
   if [ "$unzoom" -eq 1 ]; then
     "$herdr" pane zoom --off --current 2>/dev/null || true
     # Layout changed; re-read edges so the wrap check is accurate.
     edges_out=$("$herdr" pane edges --current 2>/dev/null || true)
   else
-    edges_trusted=0
+    exit 0
   fi
 fi
 
 # Move to the neighbor in the requested direction. When already at the
 # requested edge (no neighbor there): wrap to the opposite side, or — when
-# nav_at_edge=stop — do nothing. Skip the edge check when the flags are
-# unreliable (still zoomed, unzoom disabled); in that case we can't tell
-# whether we're at an edge, so we just focus in the requested direction.
-if [ "$edges_trusted" -eq 1 ] && printf '%s' "$edges_out" | grep -q "\"$dir\"[[:space:]]*:[[:space:]]*true"; then
+# nav_at_edge=stop — do nothing.
+if printf '%s' "$edges_out" | grep -q "\"$dir\"[[:space:]]*:[[:space:]]*true"; then
   if [ "$nav_at_edge" = stop ]; then
     exit 0
   fi

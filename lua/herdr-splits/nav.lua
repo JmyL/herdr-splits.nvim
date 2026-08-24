@@ -71,9 +71,18 @@ function M.move_cursor(direction, opts)
     end
   end
 
+  ---When auto-unzoom is off, keep focus inside a zoomed pane.
+  ---Local Neovim split movement still happens before this is consulted.
+  ---@return boolean
+  local function stay_in_zoomed_pane()
+    return not herdr.unzoom_enabled() and herdr.current_pane_is_zoomed() == true
+  end
+
   local embedded = win.is_embedded_floating_window()
   if win.is_floating() and not embedded then
-    herdr.focus_pane(direction)
+    if not (herdr.is_in_session() and stay_in_zoomed_pane()) then
+      herdr.focus_pane(direction)
+    end
     return
   end
 
@@ -130,12 +139,35 @@ function M.move_cursor(direction, opts)
     return move_local(win.dir_keys_reverse[direction], 1)
   end
 
+  local function apply_local_at_edge()
+    if not (will_wrap and count == 1) then
+      return
+    end
+    local sidebar = is_sidebar()
+    if type(at_edge_behavior) == 'function' then
+      at_edge_behavior({
+        direction = direction,
+        split = function() split_edge(direction) end,
+        is_sidebar = sidebar,
+        wrap = wrap_local,
+      })
+    elseif at_edge_behavior == 'stop' then
+      return
+    elseif at_edge_behavior == 'split' then
+      if not sidebar then
+        split_edge(direction)
+      end
+    else -- 'wrap' (default)
+      wrap_local()
+    end
+  end
+
   -- Command-line window (q:, q/, q?): Neovim forbids all window commands
   -- (E11). Never wincmd; at a Neovim screen edge, delegate to Herdr
   -- (subprocess-safe, does not close the cmdwin); otherwise silent no-op.
   -- Mirrors smart-splits.nvim PR #464.
   if win.is_command_line_window() then
-    if will_wrap and herdr.is_in_session() then
+    if will_wrap and herdr.is_in_session() and not stay_in_zoomed_pane() then
       local at_herdr_edge = herdr.current_pane_at_edge(direction)
       if at_herdr_edge == false then
         herdr.focus_pane(direction)
@@ -153,25 +185,7 @@ function M.move_cursor(direction, opts)
 
   -- We're at a Neovim edge. Try to cross into Herdr.
   if not herdr.is_in_session() then
-    if will_wrap and count == 1 then
-      local sidebar = is_sidebar()
-      if type(at_edge_behavior) == 'function' then
-        at_edge_behavior({
-          direction = direction,
-          split = function() split_edge(direction) end,
-          is_sidebar = sidebar,
-          wrap = wrap_local,
-        })
-      elseif at_edge_behavior == 'stop' then
-        return
-      elseif at_edge_behavior == 'split' then
-        if not sidebar then
-          split_edge(direction)
-        end
-      else -- 'wrap' (default)
-        wrap_local()
-      end
-    end
+    apply_local_at_edge()
     return
   end
 
@@ -192,6 +206,11 @@ function M.move_cursor(direction, opts)
       return
     end
     -- Still at edge after unzoom; fall through to Herdr edge check.
+  elseif stay_in_zoomed_pane() then
+    -- Stay zoomed: local at_edge only. Do not query edges or focus a pane —
+    -- a zoomed pane reports itself at every edge, so those flags lie.
+    apply_local_at_edge()
+    return
   end
 
   -- Check if we're at the Herdr edge too

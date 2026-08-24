@@ -206,6 +206,7 @@ T['applies Herdr edge behavior from embedded parent geometry'] = function()
     package.loaded['herdr-splits.herdr'] = {
       is_in_session = function() return true end,
       unzoom_enabled = function() return false end,
+      current_pane_is_zoomed = function() return false end,
       current_pane_at_edge = function(direction)
         calls[#calls + 1] = 'edge:' .. direction
         return edge
@@ -393,6 +394,7 @@ T['uses Herdr neighbors and falls back locally on focus or edge failures'] = fun
     package.loaded['herdr-splits.herdr'] = {
       is_in_session = function() return true end,
       unzoom_enabled = function() return false end,
+      current_pane_is_zoomed = function() return false end,
       current_pane_at_edge = function(direction)
         calls[#calls + 1] = 'edge:' .. direction
         local value = table.remove(edge_queue, 1)
@@ -500,6 +502,7 @@ T['wraps through the reverse Herdr neighbor unless nav_at_edge stops it'] = func
     package.loaded['herdr-splits.herdr'] = {
       is_in_session = function() return true end,
       unzoom_enabled = function() return false end,
+      current_pane_is_zoomed = function() return false end,
       current_pane_at_edge = function(direction)
         calls[#calls + 1] = 'edge:' .. direction
         return direction == 'left'
@@ -560,6 +563,8 @@ T['command-line window delegates to Herdr at the screen edge and never wincmds']
     }
     package.loaded['herdr-splits.herdr'] = {
       is_in_session = function() return true end,
+      unzoom_enabled = function() return true end,
+      current_pane_is_zoomed = function() return false end,
       current_pane_at_edge = function(direction)
         calls[#calls + 1] = 'edge:' .. direction
         return edge
@@ -614,6 +619,8 @@ T['command-line window no-ops silently when not at a screen edge'] = function()
     local focused = {}
     package.loaded['herdr-splits.herdr'] = {
       is_in_session = function() return true end,
+      unzoom_enabled = function() return true end,
+      current_pane_is_zoomed = function() return false end,
       current_pane_at_edge = function() return false end,
       nav_at_edge = function() return 'wrap' end,
       focus_pane = function(d) focused[#focused + 1] = d; return true end,
@@ -635,6 +642,65 @@ T['command-line window no-ops silently when not at a screen edge'] = function()
 
   -- Without the guard, wincmd l would move to wins[2]; with it, silent no-op.
   expect.equality(result, { stayed = true, focused = {} })
+end
+
+T['stays in a zoomed pane when auto-unzoom is disabled'] = function()
+  local result = child.lua_func(function()
+    local calls = {}
+    package.loaded['herdr-splits.herdr'] = {
+      is_in_session = function() return true end,
+      unzoom_enabled = function() return false end,
+      current_pane_is_zoomed = function()
+        calls[#calls + 1] = 'zoomed'
+        return true
+      end,
+      current_pane_at_edge = function(direction)
+        calls[#calls + 1] = 'edge:' .. direction
+        return false
+      end,
+      focus_pane = function(direction)
+        calls[#calls + 1] = 'focus:' .. direction
+        return true
+      end,
+      unzoom = function()
+        calls[#calls + 1] = 'unzoom'
+        return true
+      end,
+    }
+    package.loaded['herdr-splits.nav'] = nil
+    local nav = require('herdr-splits.nav')
+
+    vim.o.splitright = true
+    vim.cmd('vsplit')
+    local wins = vim.api.nvim_tabpage_list_wins(0)
+    table.sort(wins, function(a, b)
+      return vim.api.nvim_win_get_position(a)[2] < vim.api.nvim_win_get_position(b)[2]
+    end)
+    vim.api.nvim_set_current_win(wins[1])
+    nav.move_cursor('right')
+    local inward = vim.api.nvim_get_current_win() == wins[2]
+    local inward_calls = vim.deepcopy(calls)
+
+    calls = {}
+    vim.api.nvim_set_current_win(wins[1])
+    nav.move_cursor('left', { at_edge = 'stop' })
+    local stayed = vim.api.nvim_get_current_win() == wins[1]
+    local edge_calls = vim.deepcopy(calls)
+
+    return {
+      inward = inward,
+      inward_calls = inward_calls,
+      stayed = stayed,
+      edge_calls = edge_calls,
+    }
+  end)
+
+  expect.equality(result, {
+    inward = true,
+    inward_calls = {},
+    stayed = true,
+    edge_calls = { 'zoomed' },
+  })
 end
 
 return T

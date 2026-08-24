@@ -17,5 +17,6 @@ test: deps
 check-shell:
 	bash -n "$(ROOT)/scripts/herdr-nav.sh"
 	bash -n "$(ROOT)/scripts/herdr-resize.sh"
+	bash "$(ROOT)/tests/test_herdr_nav.sh"
 
 check: check-shell test
