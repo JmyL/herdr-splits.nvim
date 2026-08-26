@@ -17,7 +17,7 @@ Inspired by [smart-splits.nvim](https://github.com/mrjones2014/smart-splits.nvim
 
 ## Features
 
-- **Seamless navigation**: Same keys work in Neovim and plain shells — Herdr forwards them to Neovim when appropriate, Neovim delegates to Herdr at edges.
+- **Seamless navigation**: Same keys work in Neovim and plain shells — Herdr forwards them to Neovim (or tmux) when appropriate, Neovim delegates to Herdr at edges.
 - **Seamless resizing**: `<M-h/j/k/l>` resizes Neovim splits natively, delegates to Herdr when a window fills the terminal.
 - **at_edge behaviours**: `wrap` (default), `stop`, `split`, or a custom function.
 - **Plugin-aware**: Ignores snacks/neo-tree/dadbod-ui/aerial sidebars and embedded floats (zindex < 50) by default — your keybinds never get trapped inside a picker.

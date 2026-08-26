@@ -119,4 +119,12 @@ assert_call 'pane send-keys p1 alt+h'
 assert_no_call 'pane zoom'
 assert_no_call 'pane focus'
 
+# Tmux pane: same as Neovim — forward the chord so tmux can navigate.
+printf '%s\n' '{"name":"tmux"}' >"$process"
+printf '%s\n' 'unzoom_on_nav=false' 'nav_key_left=alt+h' >"$conf"
+run_nav left
+assert_call 'pane send-keys p1 alt+h'
+assert_no_call 'pane zoom'
+assert_no_call 'pane focus'
+
 printf 'ok\n'

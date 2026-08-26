@@ -2,10 +2,10 @@
 # Herdr navigation helper — used by herdr keybinds for seamless two-way nav.
 #
 # When a navigation key is pressed in Herdr:
-# 1. Check if the focused pane is running Neovim in the foreground.
-#    - If yes: forward the key chord into that pane. The Neovim plugin owns
+# 1. Check if the focused pane is running Neovim or tmux in the foreground.
+#    - If yes: forward the key chord into that pane. Neovim or tmux owns
 #      in-split movement, edge crossing, and unzoom — do NOT unzoom here, or
-#      moving between Neovim splits would incorrectly unzoom the pane.
+#      moving between inner splits would incorrectly unzoom the pane.
 # 2. If no (a plain Herdr pane): unzoom if needed, then move Herdr pane focus.
 #    At a layout edge, focus wraps around to the opposite side (smart-splits
 #    style), so navigating past the last pane lands on the first — unless
@@ -57,20 +57,22 @@ fi
 # through to the non-vim path below, which uses --current directly).
 pane_id=$("$herdr" pane current --current 2>/dev/null | grep -o '"pane_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/' || true)
 
-# Check if focused pane is running vim/nvim as foreground process.
-is_vim=0
+# Check if focused pane is running vim/nvim or tmux as foreground process.
+# Tmux is forwarded the same way: the inner multiplexer decides whether to
+# move between its panes or (via a local hook) hand back to Herdr at an edge.
+forward=0
 if [ -n "$pane_id" ] && pane_info=$("$herdr" pane process-info --current 2>/dev/null); then
-  if echo "$pane_info" | grep -qiE '"name"[[:space:]]*:[[:space:]]*"(g?(view|l?n?vim?x?)(diff)?)"' 2>/dev/null; then
-    is_vim=1
+  if echo "$pane_info" | grep -qiE '"name"[[:space:]]*:[[:space:]]*"(g?(view|l?n?vim?x?)(diff)?|tmux)"' 2>/dev/null; then
+    forward=1
   fi
 fi
 
-# Vim pane: forward the chord; the Neovim plugin decides movement + unzoom.
-if [ "$is_vim" -eq 1 ]; then
+# Inner pane: forward the chord; Neovim/tmux decide movement + unzoom.
+if [ "$forward" -eq 1 ]; then
   exec "$herdr" pane send-keys "$pane_id" "$key"
 fi
 
-# --- Non-vim Herdr pane: unzoom if needed, then focus (wrapping at edges) ---
+# --- Plain Herdr pane: unzoom if needed, then focus (wrapping at edges) ---
 
 # `pane edges` reports both edge flags and the zoomed state in one call.
 edges_out=$("$herdr" pane edges --current 2>/dev/null || true)
