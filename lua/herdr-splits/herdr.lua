@@ -51,11 +51,20 @@ function M.current_pane_at_edge(direction)
   end
 
   local ok, data = pcall(vim.json.decode, stdout)
-  if not ok or not data or not data.result or not data.result.edges then
+  if
+    not ok
+    or type(data) ~= 'table'
+    or type(data.result) ~= 'table'
+    or type(data.result.edges) ~= 'table'
+  then
     return nil
   end
 
-  return data.result.edges[edge_key] == true
+  local at_edge = data.result.edges[edge_key]
+  if type(at_edge) ~= 'boolean' then
+    return nil
+  end
+  return at_edge
 end
 
 ---Check if the current Herdr pane is zoomed.
@@ -73,11 +82,20 @@ function M.current_pane_is_zoomed()
   end
 
   local ok, data = pcall(vim.json.decode, stdout)
-  if not ok or not data or not data.result then
+  if
+    not ok
+    or type(data) ~= 'table'
+    or type(data.result) ~= 'table'
+    or type(data.result.layout) ~= 'table'
+  then
     return nil
   end
 
-  return data.result.zoomed == true
+  local zoomed = data.result.layout.zoomed
+  if type(zoomed) ~= 'boolean' then
+    return nil
+  end
+  return zoomed
 end
 
 ---Focus a Herdr pane in the given direction.
@@ -106,31 +124,20 @@ function M.unzoom()
 end
 
 ---Check whether auto-unzoom is enabled.
----Reads from the shared config file in the Herdr plugin config dir
----(default ~/.config/herdr/plugins/config/herdr-splits/herdr-splits.conf;
----same file used by the Herdr-side scripts). Default: true.
+---Reads `config.unzoom_on_nav` (resolved from setup(); default: enabled).
 ---@return boolean
 function M.unzoom_enabled()
-  local xdg = vim.env.XDG_CONFIG_HOME
-  local base
-  if xdg and xdg:sub(1, 1) == '/' then
-    base = xdg .. '/herdr/plugins/config/herdr-splits'
-  else
-    base = (vim.env.HOME or '~') .. '/.config/herdr/plugins/config/herdr-splits'
-  end
-  local config_path = vim.env.HERDR_SPLITS_CONFIG or (base .. '/herdr-splits.conf')
-  local f = io.open(config_path, 'r')
-  if not f then
-    return true -- config file doesn't exist, default enabled
-  end
-  for line in f:lines() do
-    if line:match('^%s*unzoom_on_nav%s*=%s*false') then
-      f:close()
-      return false
-    end
-  end
-  f:close()
-  return true
+  return config.unzoom_on_nav ~= false
+end
+
+---Edge-wrap behavior across the Herdr pane boundary, read from the resolved
+---in-memory config (the same value written to the shared conf that the
+---Herdr-side scripts read). `stop` suppresses wrap-across-boundary on both
+---the plain-pane side (handled by the Herdr script) and the Neovim
+---edge-wrap side (handled here). Anything else defaults to `wrap`.
+---@return '"wrap"'|'"stop"'
+function M.nav_at_edge()
+  return config.nav_at_edge == 'stop' and 'stop' or 'wrap'
 end
 
 ---Resize the current Herdr pane in the given direction.
